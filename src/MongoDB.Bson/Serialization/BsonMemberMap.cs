@@ -231,7 +231,7 @@ namespace MongoDB.Bson.Serialization
                 else if (_memberInfo is PropertyInfo)
                 {
                     var property = (PropertyInfo)_memberInfo;
-                    return !property.CanWrite;
+                    return !property.CanWrite && !typeof(System.Collections.IList).GetTypeInfo().IsAssignableFrom(property.PropertyType);
                 }
                 else
                 {
@@ -635,6 +635,20 @@ namespace MongoDB.Bson.Serialization
                     "The property '{0} {1}' of class '{2}' has no 'set' accessor. To avoid this exception, call IsReadOnly to ensure that setting a value is allowed.",
                     propertyInfo.PropertyType.FullName, propertyInfo.Name, propertyInfo.DeclaringType.FullName);
                 throw new BsonSerializationException(message);
+            }
+
+            // IList properties without a setter are set via IList methods
+            if (setMethodInfo == null)
+            {
+                return (obj, value) =>
+                {
+                    var unsettableList = GetGetter().Invoke(obj) as System.Collections.IList;
+                    unsettableList.Clear();
+                    foreach (var e in (value as System.Collections.IList))
+                    {
+                        unsettableList.Add(e);
+                    }
+                };
             }
 
             // lambdaExpression = (obj, value) => ((TClass) obj).SetMethod((TMember) value)
